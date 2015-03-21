@@ -1,0 +1,61 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.binarydreamers</groupId>
+  <artifactId>balanced-trees</artifactId>
+  <version>1.0</version>
+  <packaging>jar</packaging>
+
+  <prerequisites>
+    <maven>3.2.0</maven>
+  </prerequisites>
+
+  <name>balanced-trees</name>
+  <contributors>
+    <contributor>
+      <name>John McDole</name>
+      <email>jtmcdole@gmail.com</email>
+      <url>http://www.binarydreamers.com/</url>
+      <organization>John McDole</organization>
+      <organizationUrl>http://www.binarydreamers.com/</organizationUrl>
+      <roles>
+        <role>developer</role>
+      </roles>
+    </contributor>
+    <contributor>
+      <name>Eugene Dzhurinsky</name>
+      <email>jdevelop@gmail.com</email>
+      <url>http://jdevelop.com</url>
+      <organization>Eugene Dzhurinsky</organization>
+      <organizationUrl>http://jdevelop.com</organizationUrl>
+      <roles>
+        <role>developer</role>
+      </roles>
+    </contributor>
+  </contributors>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.11</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <resources>
+      <resource>
+        <directory>${basedir}/src/main/java</directory>
+      </resource>
+      <resource>
+        <directory>${basedir}/src/test/java</directory>
+      </resource>
+    </resources>
+  </build>
+</project>
