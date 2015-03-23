@@ -16,14 +16,7 @@ limitations under the License.
 package com.binarydreamers.trees;
 
 import java.lang.reflect.Array;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.ConcurrentModificationException;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.SortedSet;
+import java.util.*;
 
 /**
  * A binary tree implemented as an AVL tree (better searches).

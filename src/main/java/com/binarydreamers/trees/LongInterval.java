@@ -51,4 +51,24 @@ public class LongInterval implements Interval<Long> {
 			return value;
 		}
 	};
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof LongInterval)) return false;
+
+        LongInterval that = (LongInterval) o;
+
+        if (high != that.high) return false;
+        if (low != that.low) return false;
+
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = (int) (low ^ (low >>> 32));
+        result = 31 * result + (int) (high ^ (high >>> 32));
+        return result;
+    }
 }

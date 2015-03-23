@@ -15,21 +15,12 @@ limitations under the License.
 */
 package com.binarydreamers.trees;
 
-import static org.junit.Assert.*;
-
-import java.util.Arrays;
-import java.util.ConcurrentModificationException;
-import java.util.Iterator;
-import java.util.List;
-import java.util.SortedSet;
-
+import com.binarydreamers.trees.IntervalTree.SearchNearest;
 import org.junit.Test;
 
-import com.binarydreamers.trees.IntegerInterval;
-import com.binarydreamers.trees.Interval;
-import com.binarydreamers.trees.IntervalTree;
-import com.binarydreamers.trees.LongInterval;
-import com.binarydreamers.trees.IntervalTree.SearchNearest;
+import java.util.*;
+
+import static org.junit.Assert.*;
 
 public class IntervalTreeTest {
 	@Test
@@ -228,6 +219,37 @@ public class IntervalTreeTest {
 				SearchNearest.SEARCH_NEAREST_ROUNDED_UP);
 		assertEquals(new Long(200), near.getLower());
 	}
+
+    @Test
+    public void testHasPoints() {
+        IntervalTree<Long> testTree = new IntervalTree<Long>(
+                LongInterval.comparator);
+        testTree.add(new LongInterval(300, 1000));
+        testTree.add(new LongInterval(200, 300));
+        testTree.add(new LongInterval(100, 500));
+
+        List<Interval<Long>> intervals = testTree.searchIntervalsContainingPoint(1L);
+        assertTrue(intervals.isEmpty());
+
+        intervals = testTree.searchIntervalsContainingPoint(1001L);
+        assertTrue(intervals.isEmpty());
+
+        intervals = testTree.searchIntervalsContainingPoint(1000L);
+        assertEquals(1, intervals.size());
+        assertEquals(300L, intervals.get(0).getLower().longValue());
+        assertEquals(1000L, intervals.get(0).getUpper().longValue());
+
+        intervals = testTree.searchIntervalsContainingPoint(300L);
+        assertEquals(3, intervals.size());
+        assertTrue(intervals.contains(new LongInterval(300, 1000)));
+        assertTrue(intervals.contains(new LongInterval(200, 300)));
+        assertTrue(intervals.contains(new LongInterval(100, 500)));
+
+        intervals = testTree.searchIntervalsContainingPoint(250L);
+        assertEquals(2, intervals.size());
+        assertTrue(intervals.contains(new LongInterval(200, 300)));
+        assertTrue(intervals.contains(new LongInterval(100, 500)));
+    }
 
 	@Test
 	public void testHeadSet() {

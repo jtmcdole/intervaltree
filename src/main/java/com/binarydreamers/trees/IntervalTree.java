@@ -16,15 +16,7 @@ limitations under the License.
 package com.binarydreamers.trees;
 
 import java.lang.reflect.Array;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.ConcurrentModificationException;
-import java.util.Iterator;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.SortedSet;
+import java.util.*;
 
 /**
  * A binary tree that stores overlapping interval ranges. Implemented as an AVL tree (better searches).
@@ -33,7 +25,7 @@ import java.util.SortedSet;
  *           Ronald L. Rivest, Clifford Stein.
  *        chapter 13.2
  * @author John Thomas McDole
- * @param <T>
+ * @param <V>
  */
 public class IntervalTree<V extends Comparable<V>> implements SortedSet<Interval<V>> {
 	private IntervalNode<V> root;
@@ -1084,30 +1076,28 @@ public class IntervalTree<V extends Comparable<V>> implements SortedSet<Interval
 	/**
 	 * Verify every node of the tree has the correct height
 	 *
-	 * @param node to test
-	 * @return height of this node
-	 */
-	protected void verifyHeight() {
-		verifyHeight(root);
-	}
+     * @return height of the tree
+     */
+    protected void verifyHeight() {
+        verifyHeight(root);
+    }
 
 	/**
 	 * Verify every node of the tree has the correct balance factor between right and left nodes
-	 * 
-	 * @param node to test
-	 * @return height of this node
-	 */
-	protected void verifyOrder() {
-		if(root == null) return;
-		IntervalNode<V> first = minimumNode(root);
-		V last = first.object.getLower();
-		for(Interval<V> node : this) {
-			if(node.getLower().compareTo(last) < 0) {
-				throw new IllegalStateException("Order is off; last:" + last + " now:"
-						+ node.getLower());
-			}
-		}
-	}
+     *
+     * @return height of the tree
+     */
+    protected void verifyOrder() {
+        if (root == null) return;
+        IntervalNode<V> first = minimumNode(root);
+        V last = first.object.getLower();
+        for (Interval<V> node : this) {
+            if (node.getLower().compareTo(last) < 0) {
+                throw new IllegalStateException("Order is off; last:" + last + " now:"
+                        + node.getLower());
+            }
+        }
+    }
 
 	/**
 	 * Search the set for any elements in the interval
@@ -1222,4 +1212,33 @@ public class IntervalTree<V extends Comparable<V>> implements SortedSet<Interval
 		return Math.abs(otherCompare) < compare ? x : previous;
 
 	}
+
+    public List<Interval<V>> searchIntervalsContainingPoint(V point) {
+        List<Interval<V>> results = new ArrayList<Interval<V>>(size() / 2);
+        searchIntervalsContainingPointRec(root, point, results);
+        return results;
+    }
+
+    private void searchIntervalsContainingPointRec(IntervalNode<V> node, V point, List<Interval<V>> results) {
+        if (node == null) {
+            return;
+        }
+
+        if (node.max.compareTo(point) < 0) {
+            return;
+        }
+
+        if (node.left != null) {
+            searchIntervalsContainingPointRec(node.left, point, results);
+        }
+
+        if (node.object.getLower().compareTo(point) <= 0 && node.object.getUpper().compareTo(point) >= 0) {
+            results.add(node.object);
+        }
+
+        if (node.object.getLower().compareTo(point) <= 0) {
+            searchIntervalsContainingPointRec(node.right, point, results);
+        }
+
+    }
 }
