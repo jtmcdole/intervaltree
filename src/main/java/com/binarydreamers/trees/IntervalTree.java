@@ -41,11 +41,11 @@ public class IntervalTree<V extends Comparable<V>> implements SortedSet<Interval
 	private Comparator<Interval<V>> comparator;
 	private transient int modCount = 0; // Modification count to the tree, monotonically increasing
 
-	IntervalTree(Comparator<Interval<V>> comparator) {
+	public IntervalTree(Comparator<Interval<V>> comparator) {
 		this.comparator = comparator;
 	}
 	
-	IntervalTree() {
+	public IntervalTree() {
 		this.comparator = new Comparator<Interval<V>>() {
 			public int compare(Interval<V> o1, Interval<V> o2) {
 				int comp = o1.getLower().compareTo(o2.getLower());
