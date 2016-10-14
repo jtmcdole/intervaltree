@@ -40,7 +40,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 	private Comparator<V> comparator;
 	private transient int modCount = 0; // Modification count to the tree, monotonically increasing
 
-	BinaryTree(Comparator<V> comparator) {
+	public BinaryTree(Comparator<V> comparator) {
 		this.comparator = comparator;
 	}
 
