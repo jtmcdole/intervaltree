@@ -16,51 +16,48 @@ limitations under the License.
 package com.binarydreamers.trees;
 
 import java.lang.reflect.Array;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.ConcurrentModificationException;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.SortedSet;
+import java.util.*;
 
 /**
- * A binary tree implemented as an AVL tree (better searches).
+ * A binary tree that stores overlapping interval ranges. Implemented as an AVL tree (better searches).
  * Notes: Adapted from "Introduction to Algorithms", second edition,
  *        by Thomas H. Cormen, Charles E. leiserson,
  *           Ronald L. Rivest, Clifford Stein.
  *        chapter 13.2
  * @author John Thomas McDole
- * @param <T>
+ * @param <V>
  */
-public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
+public class IntervalTree<V extends Comparable<V>> implements SortedSet<Interval<V>> {
 	private IntervalNode<V> root;
 	private int count;
-	private Comparator<V> comparator;
+	private Comparator<Interval<V>> comparator;
 	private transient int modCount = 0; // Modification count to the tree, monotonically increasing
 
-	BinaryTree(Comparator<V> comparator) {
+	public IntervalTree(Comparator<Interval<V>> comparator) {
 		this.comparator = comparator;
 	}
-
-	public BinaryTree() {
-		// natural ordering
-		this.comparator = new Comparator<V>() {
-			@Override
-			public int compare(V o1, V o2) {
-				return o1.compareTo(o2);
+	
+	public IntervalTree() {
+		this.comparator = new Comparator<Interval<V>>() {
+			public int compare(Interval<V> o1, Interval<V> o2) {
+				int comp = o1.getLower().compareTo(o2.getLower());
+				if(comp == 0) {
+					comp = o1.getUpper().compareTo(o2.getUpper());
+				}
+				return comp;
 			}
 		};
-	}
+	}	
 
 	/**
 	 * Add the element to the tree.
 	 */
-	public boolean add(V element) {
+	public boolean add(Interval<V> element) {
 		IntervalNode<V> x = root;
 
 		IntervalNode<V> node = new IntervalNode<V>();
+		V max = element.getUpper();
+		node.max = max; // Initial value is always ourself.
 		node.object = element;
 
 		if (root == null) {
@@ -71,6 +68,11 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 		}
 
 		while (true) {
+			// We only update if the new element is larger than the existing ones
+			if (node.max.compareTo(x.max) > 0) {
+				x.max = max;
+			}
+
 			int compare = comparator.compare(element, x.object);
 			if (0 == compare) {
 				return false;
@@ -123,14 +125,22 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 					rotateLeft(node);
 					node.balanceFactor = node.parent.balanceFactor = 0;
 					node = node.parent;
+
+					// Update node's new max; but recalculate the children
+					recalculateMax(node.left);
+					recalculateMax(node.right);
+					recalculateMax(node);
 				} else {
 					// Double (Right/Left) rotation
 					// node will now be old node.right.left
 					rotateRightLeft(node);
 					node = node.parent; // Update to new parent (old grandchild)
+					recalculateMax(node.left);
+					recalculateMax(node.right);
+					recalculateMax(node);
 					if (node.balanceFactor == 1) {
 						node.right.balanceFactor = 0;
-						node.left.balanceFactor = (byte) -1;
+						node.left.balanceFactor = -1;
 					} else if (node.balanceFactor == 0) {
 						node.right.balanceFactor = 0;
 						node.left.balanceFactor = 0;
@@ -147,11 +157,19 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 					rotateRight(node);
 					node.balanceFactor = node.parent.balanceFactor = 0;
 					node = node.parent;
+
+					// Update node's new max; but recalculate the children
+					recalculateMax(node.left);
+					recalculateMax(node.right);
+					recalculateMax(node);
 				} else {
 					// Double (Left/Right) rotation
 					// node will now be old node.left.right
 					rotateLeftRight(node);
 					node = node.parent;
+					recalculateMax(node.left);
+					recalculateMax(node.right);
+					recalculateMax(node);
 					if (node.balanceFactor == -1) {
 						node.right.balanceFactor = 1;
 						node.left.balanceFactor = 0;
@@ -160,7 +178,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 						node.left.balanceFactor = 0;
 					} else {
 						node.right.balanceFactor = 0;
-						node.left.balanceFactor = (byte) -1;
+						node.left.balanceFactor = -1;
 					}
 					node.balanceFactor = 0;
 				}
@@ -176,7 +194,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 	 */
 	public boolean contains(Object object) {
 		@SuppressWarnings("unchecked")
-		V element = (V) object;
+		Interval<V> element = (Interval<V>) object;
 		IntervalNode<V> x = getIntervalNode(element);
 		return x != null;
 	}
@@ -184,7 +202,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 	/**
 	 * Test to see if an element is stored in the tree
 	 */
-	private IntervalNode<V> getIntervalNode(V element) {
+	private IntervalNode<V> getIntervalNode(Interval<V> element) {
 		if (element == null) return null;
 		IntervalNode<V> x = root;
 		while (x != null) {
@@ -200,6 +218,29 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * Make sure the node has the right maximum of the subtree
+	 * node.max = MAX( node.high, node.left.max, node.right.max );
+	 */
+	private void recalculateMax(IntervalNode<V> node) {
+		V max;
+		if(node == null) return;
+		if (node.left == node.right && node.right == null) {
+			node.max = node.object.getUpper();
+			return;
+		} else if (node.left == null) {
+			max = node.right.max;
+		} else if (node.right == null) {
+			max = node.left.max;
+		} else {
+			/* Get the best of the children */
+			max = node.left.max.compareTo(node.right.max) > 0 ? node.left.max : node.right.max;
+		}
+
+		/* And pit that against our interval */
+		node.max = node.object.getUpper().compareTo(max) > 0 ? node.object.getUpper() : max;  
 	}
 
 	/**
@@ -363,21 +404,23 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 		IntervalNode<V> parent;
 		IntervalNode<V> left;
 		IntervalNode<V> right;
-		V object;
-		byte balanceFactor;
+		int balanceFactor;
+		Interval<V> object;
+		V max;
 
 		@Override
 		public String toString() {
 			boolean leftSet = left != null;
 			boolean rightSet = right != null;
-			return "(b:" + balanceFactor + " o:" + object + " l:" + leftSet + " r:" + rightSet + ")";
+			return "(b:" + balanceFactor + " o:" + object + " l:" + leftSet + " r:" + rightSet
+					+ " max:" + max + ")";
 		}
 	}
 
 	@Override
-	public boolean addAll(Collection<? extends V> arg0) {
+	public boolean addAll(Collection<? extends Interval<V>> arg0) {
 		boolean modified = false;
-		for(V ele : arg0) {
+		for(Interval<V> ele : arg0) {
 			modified = add(ele) ? true : modified;
 		}
 		return modified;
@@ -403,8 +446,8 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 	}
 
 	@Override
-	public Iterator<V> iterator() {
-		return new Iterator<V>() {
+	public Iterator<Interval<V>> iterator() {
+		return new Iterator<Interval<V>>() {
 			int modCountGaurd = modCount;
 			IntervalNode<V> current = root != null ? minimumNode(root) : null;
 			IntervalNode<V> last = null;
@@ -420,7 +463,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 			}
 
 			@Override
-			public V next() {
+			public Interval<V> next() {
 				if (modCountGaurd != modCount)
 					throw new ConcurrentModificationException();
 				if (current == null) {
@@ -441,7 +484,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 				if (last == null) {
 					throw new IllegalStateException();
 				}
-				BinaryTree.this.remove(last);
+				IntervalTree.this.remove(last);
 				modCountGaurd++; // we're allowed to delete nodes and keep going
 				last = null;
 			}
@@ -451,7 +494,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 	@Override
 	public boolean remove(Object arg0) {
 		@SuppressWarnings("unchecked")
-		V element = (V) arg0;
+		Interval<V> element = (Interval<V>) arg0;
 		IntervalNode<V> x = getIntervalNode(element);
 		if(x != null) {
 			remove(x);
@@ -476,7 +519,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 			if (node.right != null) {
 				y = node.right;
 				y.parent = node.parent;
-				y.balanceFactor = (byte) (node.balanceFactor - 1);
+				y.balanceFactor = node.balanceFactor - 1;
 				y.left = node.left;
 				if (y.left != null) {
 					y.left.parent = y;
@@ -484,7 +527,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 			} else if (node.left != null) {
 				y = node.left;
 				y.parent = node.parent;
-				y.balanceFactor = (byte) (node.balanceFactor + 1);
+				y.balanceFactor = node.balanceFactor + 1;
 			} else {
 				y = null;
 			}
@@ -547,6 +590,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 		// Recalculate max values all the way to the top.
 		node = w;
 		while (node != null) {
+			recalculateMax(node);
 			node = node.parent;
 		}
 
@@ -562,9 +606,12 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 				if (node.right.balanceFactor == -1) {
 					rotateRightLeft(node);
 					node = node.parent; // old grand-child!
+					recalculateMax(node.left);
+					recalculateMax(node.right);
+					recalculateMax(node);
 					if (node.balanceFactor == 1) {
 						node.right.balanceFactor = 0;
-						node.left.balanceFactor = (byte) -1;
+						node.left.balanceFactor = -1;
 					} else if (node.balanceFactor == 0) {
 						node.right.balanceFactor = 0;
 						node.left.balanceFactor = 0;
@@ -576,8 +623,11 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 				} else {
 					// single left-rotation
 					rotateLeft(node);
+					recalculateMax(node.left);
+					recalculateMax(node.right);
+					recalculateMax(node);
 					if (node.parent.balanceFactor == 0) {
-						node.parent.balanceFactor = (byte) -1;
+						node.parent.balanceFactor = -1;
 						node.balanceFactor = 1;
 						break;
 					} else {
@@ -592,6 +642,9 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 				if (node.left.balanceFactor == 1) {
 					rotateLeftRight(node);
 					node = node.parent; // old grand-child!
+					recalculateMax(node.left);
+					recalculateMax(node.right);
+					recalculateMax(node);
 					if (node.balanceFactor == -1) {
 						node.right.balanceFactor = 1;
 						node.left.balanceFactor = 0;
@@ -600,14 +653,17 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 						node.left.balanceFactor = 0;
 					} else {
 						node.right.balanceFactor = 0;
-						node.left.balanceFactor = (byte) -1;
+						node.left.balanceFactor = -1;
 					}
 					node.balanceFactor = 0;
 				} else {
 					rotateRight(node);
+					recalculateMax(node.left);
+					recalculateMax(node.right);
+					recalculateMax(node);
 					if (node.parent.balanceFactor == 0) {
 						node.parent.balanceFactor = 1;
-						node.balanceFactor = (byte) -1;
+						node.balanceFactor = -1;
 						break;
 					} else {
 						node.parent.balanceFactor = 0;
@@ -647,9 +703,9 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 	@Override
 	public boolean retainAll(Collection<?> arg0) {
 		int beforeCount = count;
-		Iterator<V> it = this.iterator();
+		Iterator<Interval<V>> it = this.iterator();
 		while(it.hasNext()) {
-			V ele = it.next();
+			Interval<V> ele = it.next();
 			if(!arg0.contains(ele)) {
 				it.remove();
 			}
@@ -680,7 +736,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 		int size = size();
 		Y[] r = a.length >= size ? a : (Y[]) Array.newInstance(a.getClass().getComponentType(),
 				size);
-		Iterator<V> it = iterator();
+		Iterator<Interval<V>> it = iterator();
 		for (int i = 0; i < r.length; i++) {
 			if (!it.hasNext()) {
 				if (a != r)
@@ -695,52 +751,52 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 	}
 
 	@Override
-	public Comparator<V> comparator() {
+	public Comparator<Interval<V>> comparator() {
 		return comparator;
 	}
 
 	@Override
-	public V first() {
+	public Interval<V> first() {
 		IntervalNode<V> min = minimumNode(root);
 		return min != null ? min.object : null;
 	}
 
 	@Override
-	public V last() {
+	public Interval<V> last() {
 		IntervalNode<V> max = maxiumNode(root);
 		return max != null ? max.object : null;
 	}
 
 	@Override
-	public SortedSet<V> headSet(V toElement) {
+	public SortedSet<Interval<V>> headSet(Interval<V> toElement) {
 		return new SubIntervalTree<V>(this, null, toElement);
 	}
 
 	@Override
-	public SortedSet<V> subSet(V fromElement, V toElement) {
+	public SortedSet<Interval<V>> subSet(Interval<V> fromElement, Interval<V> toElement) {
 		return new SubIntervalTree<V>(this, fromElement, toElement);
 	}
 
 	@Override
-	public SortedSet<V> tailSet(V fromElement) {
+	public SortedSet<Interval<V>> tailSet(Interval<V> fromElement) {
 		return new SubIntervalTree<V>(this, fromElement, null);
 	}
 
-	static class SubIntervalTree<T extends Comparable<T>> implements SortedSet<T> {
+	static class SubIntervalTree<T extends Comparable<T>> implements SortedSet<Interval<T>> {
 		// For supporting subSet, headSet, and tailSet backed views.
 		// These elements do not have to be in the tree, they are just boundary conditions for the view.
-		private BinaryTree<T> backingSet;
-		private T fromElement;
-		private T toElement;
+		private IntervalTree<T> backingSet;
+		private Interval<T> fromElement;
+		private Interval<T> toElement;
 		boolean fromInclusive;
 		boolean toInclusive;
 
-		private SubIntervalTree(BinaryTree<T> tree, T fromElement, T toElement) {
+		private SubIntervalTree(IntervalTree<T> tree, Interval<T> fromElement, Interval<T> toElement) {
 			this(tree, fromElement, true, toElement, false);
 		}
 
-		private SubIntervalTree(BinaryTree<T> tree, T fromElement,
-				boolean fromInclusive, T toElement, boolean toInclusive) {
+		private SubIntervalTree(IntervalTree<T> tree, Interval<T> fromElement,
+				boolean fromInclusive, Interval<T> toElement, boolean toInclusive) {
 			this.backingSet = tree;
 			this.fromElement = fromElement;
 			this.fromInclusive = fromInclusive;
@@ -749,7 +805,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 		}
 
 		@Override
-		public boolean add(T element) {
+		public boolean add(Interval<T> element) {
 			//IllegalArgumentException for elements outside the range.
 			if (outsideRange(element))
 				throw new IllegalArgumentException("Element " + element + " is outside the view");
@@ -759,7 +815,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 		@Override
 		public boolean remove(Object arg0) {
 			@SuppressWarnings("unchecked")
-			T element = (T) arg0;
+			Interval<T> element = (Interval<T>) arg0;
 			if (outsideRange(element))
 				return false;
 			return backingSet.remove(arg0);
@@ -769,7 +825,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 			return outsideRange(node.object);
 		}
 
-		private boolean outsideRange(T element) {
+		private boolean outsideRange(Interval<T> element) {
 			if(fromElement != null) {
 				if (backingSet.comparator.compare(element, fromElement) < (fromInclusive ? 1 : 0)) {
 					return true;
@@ -784,11 +840,11 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 		}
 
 		@Override
-		public boolean addAll(Collection<? extends T> arg0) {
+		public boolean addAll(Collection<? extends Interval<T>> arg0) {
 			// Question; do we throw an exception before modifying the set? or while we're
 			// inserting? TreeSet adds each one and throws when it encounters.
 			boolean modified = false;
-			for(T ele : arg0) {
+			for(Interval<T> ele : arg0) {
 				modified = add(ele) ? true : modified;
 			}
 			return modified;
@@ -796,7 +852,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 
 		@Override
 		public void clear() {
-			Iterator<T> it = iterator();
+			Iterator<Interval<T>> it = iterator();
 			while(it.hasNext()) {
 				it.next();
 				it.remove();
@@ -806,7 +862,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 		@Override
 		public boolean contains(Object o) {
 			@SuppressWarnings("unchecked")
-			T element = (T) o;
+			Interval<T> element = (Interval<T>) o;
 			if (outsideRange(element))
 				return false;
 			return backingSet.contains(o);
@@ -826,8 +882,8 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 		}
 
 		@Override
-		public Iterator<T> iterator() {
-			return new Iterator<T>() {
+		public Iterator<Interval<T>> iterator() {
+			return new Iterator<Interval<T>>() {
 				// NOTE(jtmcdole): The behavior of sub-set iterator of a TreeSet that has an
 				// element added that fills the subset is to return an error instead of returning
 				// the updated head.
@@ -846,7 +902,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 				}
 
 				@Override
-				public T next() {
+				public Interval<T> next() {
 					if (modCountGaurd != backingSet.modCount)
 						throw new ConcurrentModificationException();
 					if (current == null) {
@@ -888,10 +944,10 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 
 		@Override
 		public boolean retainAll(Collection<?> c) {
-			Iterator<T> it = iterator();
+			Iterator<Interval<T>> it = iterator();
 			boolean changed = false;
 			while(it.hasNext()) {
-				T ele = it.next();
+				Interval<T> ele = it.next();
 				if(c.contains(ele)) {
 					it.remove();
 					changed = true;
@@ -908,7 +964,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 		public int size() {
 			if(modCount != backingSet.modCount) {
 				size = 0;
-				for (@SuppressWarnings("unused") T element : this) {
+				for (@SuppressWarnings("unused") Interval<T> element : this) {
 					size++;
 				}
 			}
@@ -917,8 +973,8 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 
 		@Override
 		public Object[] toArray() {
-			ArrayList<T> list = new ArrayList<T>();
-			Iterator<T> it = iterator();
+			ArrayList<Interval<T>> list = new ArrayList<Interval<T>>();
+			Iterator<Interval<T>> it = iterator();
 			while(it.hasNext()) {
 				list.add(it.next());
 			}
@@ -931,7 +987,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 			int size = size();
 			B[] r = a.length >= size ? a : (B[]) Array.newInstance(a.getClass().getComponentType(),
 					size);
-			Iterator<T> it = iterator();
+			Iterator<Interval<T>> it = iterator();
 			for (int i = 0; i < r.length; i++) {
 				if (!it.hasNext()) {
 					if (a != r)
@@ -946,12 +1002,12 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 		}
 
 		@Override
-		public Comparator<? super T> comparator() {
+		public Comparator<? super Interval<T>> comparator() {
 			return backingSet.comparator;
 		}
 
 		@Override
-		public T first() {
+		public Interval<T> first() {
 			IntervalNode<T> potential = firstNode();
 			if(potential != null) return potential.object;
 			return null;
@@ -970,7 +1026,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 		}
 
 		@Override
-		public T last() {
+		public Interval<T> last() {
 			if (toElement == null)
 				return backingSet.first();
 			IntervalNode<T> potential = backingSet.searchNearest(toElement,
@@ -983,17 +1039,17 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 		}
 
 		@Override
-		public SortedSet<T> headSet(T toElement) {
+		public SortedSet<Interval<T>> headSet(Interval<T> toElement) {
 			return new SubIntervalTree<T>(backingSet, null, toElement);
 		}
 
 		@Override
-		public SortedSet<T> subSet(T fromElement, T toElement) {
+		public SortedSet<Interval<T>> subSet(Interval<T> fromElement, Interval<T> toElement) {
 			return new SubIntervalTree<T>(backingSet, fromElement, toElement);
 		}
 
 		@Override
-		public SortedSet<T> tailSet(T afromElementrg0) {
+		public SortedSet<Interval<T>> tailSet(Interval<T> afromElementrg0) {
 			return new SubIntervalTree<T>(backingSet, fromElement, null);
 		}
 	}
@@ -1020,42 +1076,85 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 	/**
 	 * Verify every node of the tree has the correct height
 	 *
-	 * @param node to test
-	 * @return height of this node
-	 */
-	protected void verifyHeight() {
-		verifyHeight(root);
-	}
+     * @return height of the tree
+     */
+    protected void verifyHeight() {
+        verifyHeight(root);
+    }
 
 	/**
 	 * Verify every node of the tree has the correct balance factor between right and left nodes
+     *
+     * @return height of the tree
+     */
+    protected void verifyOrder() {
+        if (root == null) return;
+        IntervalNode<V> first = minimumNode(root);
+        V last = first.object.getLower();
+        for (Interval<V> node : this) {
+            if (node.getLower().compareTo(last) < 0) {
+                throw new IllegalStateException("Order is off; last:" + last + " now:"
+                        + node.getLower());
+            }
+        }
+    }
+
+	/**
+	 * Search the set for any elements in the interval
 	 * 
-	 * @param node to test
-	 * @return height of this node
+	 * TODO(jtmcdole): should be a set backed by the tree?
+	 *
+	 * @param interval
+	 * @return
 	 */
-	protected void verifyOrder() {
-		if(root == null) return;
-		IntervalNode<V> first = minimumNode(root);
-		V last = first.object;
-		for(V node : this) {
-			if(node.compareTo(last) < 0) {
-				throw new IllegalStateException("Order is off; last:" + last + " now:"
-						+ node);
-			}
+	public List<Interval<V>> searchInterval(Interval<V> interval) {
+		List<Interval<V>> found = new ArrayList<Interval<V>>();
+		searchIntervalRecursive(interval, root, found);
+		return found;
+	}
+
+	/**
+	 * Search each node, recursively matching against the search interval
+	 */
+	private void searchIntervalRecursive(Interval<V> interval, IntervalNode<V> node,
+			List<Interval<V>> storage) {
+		if (node == null)
+			return;
+
+		// If the node's max interval is less than the low interval, no children will match
+		if (node.max.compareTo(interval.getLower()) < 0)
+			return;
+
+		// left children
+		searchIntervalRecursive(interval, node.left, storage);
+
+		// Do we overlap? s.low <= n.high && n.low <= s.high; where s = interval, n = node
+		if (interval.getLower().compareTo(node.object.getUpper()) < 0
+				&& node.object.getLower().compareTo(interval.getUpper()) < 0) {
+			storage.add(node.object);
 		}
+
+		// if interval.high is to the left of the start of Node's interval, then no children to the
+		// right will match (short cut)
+		if (interval.getUpper().compareTo(node.object.getLower()) < 0) {
+			return;
+		}
+
+		// else, search the right nodes as well
+		searchIntervalRecursive(interval, node.right, storage);
 	}
 
 	/**
 	 * Search the tree for the matching element, or the 'nearest' one.
 	 */
-	public V searchNearestElement(V element) {
+	public Interval<V> searchNearestElement(Interval<V> element) {
 		return searchNearestElement(element, SearchNearest.SEARCH_NEAREST_ABSOLUTE);
 	}
 
 	/**
 	 * Search the tree for the matching element, or the 'nearest' one.
 	 */
-	public V searchNearestElement(V element, SearchNearest nearestOption) {
+	public Interval<V> searchNearestElement(Interval<V> element, SearchNearest nearestOption) {
 		IntervalNode<V> found = searchNearest(element, nearestOption);
 		if (found != null)
 			return found.object;
@@ -1074,7 +1173,7 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 	/**
 	 * Search the tree for the matching element, or the 'nearest' node.
 	 */
-	protected IntervalNode<V> searchNearest(V element, SearchNearest option) {
+	protected IntervalNode<V> searchNearest(Interval<V> element, SearchNearest option) {
 		if (element == null)
 			return null;
 		IntervalNode<V> x = root;
@@ -1113,4 +1212,33 @@ public class BinaryTree<V extends Comparable<V>> implements SortedSet<V> {
 		return Math.abs(otherCompare) < compare ? x : previous;
 
 	}
+
+    public List<Interval<V>> searchIntervalsContainingPoint(V point) {
+        List<Interval<V>> results = new ArrayList<Interval<V>>(size() / 2);
+        searchIntervalsContainingPointRec(root, point, results);
+        return results;
+    }
+
+    private void searchIntervalsContainingPointRec(IntervalNode<V> node, V point, List<Interval<V>> results) {
+        if (node == null) {
+            return;
+        }
+
+        if (node.max.compareTo(point) < 0) {
+            return;
+        }
+
+        if (node.left != null) {
+            searchIntervalsContainingPointRec(node.left, point, results);
+        }
+
+        if (node.object.getLower().compareTo(point) <= 0 && node.object.getUpper().compareTo(point) >= 0) {
+            results.add(node.object);
+        }
+
+        if (node.object.getLower().compareTo(point) <= 0) {
+            searchIntervalsContainingPointRec(node.right, point, results);
+        }
+
+    }
 }

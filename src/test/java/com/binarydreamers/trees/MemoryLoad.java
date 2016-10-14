@@ -15,11 +15,10 @@ limitations under the License.
 */
 package com.binarydreamers.trees;
 
+import com.binarydreamers.trees.BinaryTree.IntervalNode;
+
 import java.util.Comparator;
 import java.util.Random;
-
-import com.binarydreamers.trees.BinaryTree.IntervalNode;
-import com.binarydreamers.trees.Interval;
 
 class MemoryLoad {
   static class StringInterval implements Interval<String> {
